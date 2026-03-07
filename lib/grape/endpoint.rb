@@ -72,7 +72,7 @@ module Grape
       @options = options
 
       @options[:path] = Array(options[:path])
-      @options[:path] << '/' if options[:path].empty?
+      @options[:path] << "/" if options[:path].empty?
       @options[:method] = Array(options[:method])
 
       @status = nil
@@ -133,9 +133,11 @@ module Grape
     def call!(env)
       env[Grape::Env::API_ENDPOINT] = self
       @env = env
-      # this adds the helpers only to the instance
-      singleton_class.include(@helpers) if @helpers
-      @app.call(env)
+      ActiveSupport::Notifications.instrument("endpoint_call.grape", endpoint: self, env: env) do
+        # this adds the helpers only to the instance
+        singleton_class.include(@helpers) if @helpers
+        @app.call(env)
+      end
     end
 
     # Return the collection of endpoints within this endpoint.
@@ -160,7 +162,7 @@ module Grape
     protected
 
     def run
-      ActiveSupport::Notifications.instrument('endpoint_run.grape', endpoint: self, env: env) do
+      ActiveSupport::Notifications.instrument("endpoint_run.grape", endpoint: self, env: env) do
         @request = Grape::Request.new(env, build_params_with: inheritable_setting.namespace_inheritable[:build_params_with])
         begin
           self.class.run_before_each(self)
@@ -168,11 +170,11 @@ module Grape
           @before_filter_passed = true
 
           if env.key?(Grape::Env::GRAPE_ALLOWED_METHODS)
-            header['Allow'] = env[Grape::Env::GRAPE_ALLOWED_METHODS].join(', ')
+            header["Allow"] = env[Grape::Env::GRAPE_ALLOWED_METHODS].join(", ")
             raise Grape::Exceptions::MethodNotAllowed.new(header) unless options?
 
-            header 'Allow', header['Allow']
-            response_object = ''
+            header "Allow", header["Allow"]
+            response_object = ""
             status 204
           else
             run_filters before_validations, :before_validation
@@ -200,7 +202,7 @@ module Grape
     def execute
       return unless @source
 
-      ActiveSupport::Notifications.instrument('endpoint_render.grape', endpoint: self) do
+      ActiveSupport::Notifications.instrument("endpoint_render.grape", endpoint: self) do
         @source.bind_call(self)
       end
     end
@@ -208,7 +210,7 @@ module Grape
     def run_validators(validators, request)
       validation_errors = []
 
-      ActiveSupport::Notifications.instrument('endpoint_run_validators.grape', endpoint: self, validators: validators, request: request) do
+      ActiveSupport::Notifications.instrument("endpoint_run_validators.grape", endpoint: self, validators: validators, request: request) do
         validators.each do |validator|
           validator.validate(request)
         rescue Grape::Exceptions::Validation => e
@@ -226,7 +228,7 @@ module Grape
     def run_filters(filters, type = :other)
       return unless filters
 
-      ActiveSupport::Notifications.instrument('endpoint_run_filters.grape', endpoint: self, filters: filters, type: type) do
+      ActiveSupport::Notifications.instrument("endpoint_run_filters.grape", endpoint: self, filters: filters, type: type) do
         filters.each { |filter| instance_eval(&filter) }
       end
     end
@@ -311,7 +313,7 @@ module Grape
     def prepare_version(namespace_inheritable_version)
       return if namespace_inheritable_version.blank?
 
-      namespace_inheritable_version.length == 1 ? namespace_inheritable_version.first : namespace_inheritable_version
+      (namespace_inheritable_version.length == 1) ? namespace_inheritable_version.first : namespace_inheritable_version
     end
 
     def build_stack
@@ -323,35 +325,35 @@ module Grape
       stack.use Rack::Head
       stack.use Rack::Lint if lint?
       stack.use Grape::Middleware::Error,
-                format: format,
-                content_types: content_types,
-                default_status: inheritable_setting.namespace_inheritable[:default_error_status],
-                rescue_all: inheritable_setting.namespace_inheritable[:rescue_all],
-                rescue_grape_exceptions: inheritable_setting.namespace_inheritable[:rescue_grape_exceptions],
-                default_error_formatter: inheritable_setting.namespace_inheritable[:default_error_formatter],
-                error_formatters: inheritable_setting.namespace_stackable_with_hash(:error_formatters),
-                rescue_options: inheritable_setting.namespace_stackable_with_hash(:rescue_options),
-                rescue_handlers: rescue_handlers,
-                base_only_rescue_handlers: inheritable_setting.namespace_stackable_with_hash(:base_only_rescue_handlers),
-                all_rescue_handler: inheritable_setting.namespace_inheritable[:all_rescue_handler],
-                grape_exceptions_rescue_handler: inheritable_setting.namespace_inheritable[:grape_exceptions_rescue_handler]
+        format: format,
+        content_types: content_types,
+        default_status: inheritable_setting.namespace_inheritable[:default_error_status],
+        rescue_all: inheritable_setting.namespace_inheritable[:rescue_all],
+        rescue_grape_exceptions: inheritable_setting.namespace_inheritable[:rescue_grape_exceptions],
+        default_error_formatter: inheritable_setting.namespace_inheritable[:default_error_formatter],
+        error_formatters: inheritable_setting.namespace_stackable_with_hash(:error_formatters),
+        rescue_options: inheritable_setting.namespace_stackable_with_hash(:rescue_options),
+        rescue_handlers: rescue_handlers,
+        base_only_rescue_handlers: inheritable_setting.namespace_stackable_with_hash(:base_only_rescue_handlers),
+        all_rescue_handler: inheritable_setting.namespace_inheritable[:all_rescue_handler],
+        grape_exceptions_rescue_handler: inheritable_setting.namespace_inheritable[:grape_exceptions_rescue_handler]
 
       stack.concat inheritable_setting.namespace_stackable[:middleware]
 
       if inheritable_setting.namespace_inheritable[:version].present?
         stack.use Grape::Middleware::Versioner.using(inheritable_setting.namespace_inheritable[:version_options][:using]),
-                  versions: inheritable_setting.namespace_inheritable[:version].flatten,
-                  version_options: inheritable_setting.namespace_inheritable[:version_options],
-                  prefix: inheritable_setting.namespace_inheritable[:root_prefix],
-                  mount_path: inheritable_setting.namespace_stackable[:mount_path].first
+          versions: inheritable_setting.namespace_inheritable[:version].flatten,
+          version_options: inheritable_setting.namespace_inheritable[:version_options],
+          prefix: inheritable_setting.namespace_inheritable[:root_prefix],
+          mount_path: inheritable_setting.namespace_stackable[:mount_path].first
       end
 
       stack.use Grape::Middleware::Formatter,
-                format: format,
-                default_format: inheritable_setting.namespace_inheritable[:default_format] || :txt,
-                content_types: content_types,
-                formatters: inheritable_setting.namespace_stackable_with_hash(:formatters),
-                parsers: inheritable_setting.namespace_stackable_with_hash(:parsers)
+        format: format,
+        default_format: inheritable_setting.namespace_inheritable[:default_format] || :txt,
+        content_types: content_types,
+        formatters: inheritable_setting.namespace_stackable_with_hash(:formatters),
+        parsers: inheritable_setting.namespace_stackable_with_hash(:parsers)
 
       builder = stack.build
       builder.run ->(env) { env[Grape::Env::API_ENDPOINT].run }
@@ -367,7 +369,7 @@ module Grape
 
     def build_response_cookies
       response_cookies do |name, value|
-        cookie_value = value.is_a?(Hash) ? value : { value: value }
+        cookie_value = value.is_a?(Hash) ? value : {value: value}
         Rack::Utils.set_cookie_header! header, name, cookie_value
       end
     end
